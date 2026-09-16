@@ -191,7 +191,7 @@ The entire fitted `Pipeline` (preprocessing `ColumnTransformer` + `DecisionTreeC
   1. Converts it to a single-row DataFrame.
   2. Applies `engineer_features()` from `src/feature_engineering.py` (the same function used in the notebook) to compute `TotalServices`/`tenure_group`.
   3. Passes the result through the saved pipeline's `predict()`/`predict_proba()`.
-  4. Returns `churn_prediction` (`"No"`/`"Yes"`) and `churn_probability` (probability of the `"Yes"` class, read from the model's actual `classes_` order rather than an assumed index).
+  4. Returns `prediction` (`"No"`/`"Yes"`) and `churn_probability` (probability of the `"Yes"` class, read from the model's actual `classes_` order rather than an assumed index).
 
 The model is loaded once at process startup, never retrained per-request. Invalid input (missing fields, wrong types, invalid categorical values, out-of-range numbers) is rejected by Pydantic validation with an HTTP 422 response before reaching the model.
 
@@ -266,7 +266,7 @@ Response:
 
 ```json
 {
-  "churn_prediction": "Yes",
+  "prediction": "Yes",
   "churn_probability": 0.6142
 }
 ```

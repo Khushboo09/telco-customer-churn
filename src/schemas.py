@@ -1,28 +1,9 @@
-"""Pydantic request schema for the FastAPI /predict endpoint.
-
-This defines exactly the 19 raw customer fields required by the saved
-pipeline (``model/churn_model.pkl``), as confirmed by inspecting
-``pipeline.feature_names_in_`` and ``src/feature_engineering.py``:
-
-    ['gender', 'SeniorCitizen', 'Partner', 'Dependents', 'tenure',
-     'PhoneService', 'MultipleLines', 'InternetService', 'OnlineSecurity',
-     'OnlineBackup', 'DeviceProtection', 'TechSupport', 'StreamingTV',
-     'StreamingMovies', 'Contract', 'PaperlessBilling', 'PaymentMethod',
-     'MonthlyCharges', 'TotalCharges']
-
-``TotalServices`` and ``tenure_group`` are deliberately NOT included here:
-they are computed at request time by ``engineer_features()`` in
-``src/feature_engineering.py`` (the single source of truth for that logic),
-not supplied by the client and not re-derived here.
-"""
-
 from typing import Literal
 
 from pydantic import BaseModel, Field
 
 
 class CustomerData(BaseModel):
-    """Raw customer record accepted by POST /predict."""
 
     gender: Literal["Female", "Male"] = Field(
         ..., description="Customer's gender."
@@ -120,9 +101,8 @@ class CustomerData(BaseModel):
 
 
 class PredictionResponse(BaseModel):
-    """Response returned by POST /predict."""
 
-    churn_prediction: Literal["No", "Yes"] = Field(
+    prediction: Literal["No", "Yes"] = Field(
         ..., description="Predicted churn label from the saved model."
     )
     churn_probability: float = Field(

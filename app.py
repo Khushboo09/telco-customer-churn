@@ -1,13 +1,3 @@
-# Day 2: FastAPI REST API for churn prediction.
-#
-# POST /predict:
-#   1. Accepts customer information as JSON
-#   2. Applies src.feature_engineering.engineer_features() to compute TotalServices/tenure_group
-#      (the SAME function used by the notebook - do not reimplement this logic here)
-#   3. Applies the saved preprocessing pipeline
-#   4. Loads the trained model from model/churn_model.pkl
-#   5. Returns the churn prediction and probability
-
 import logging
 from pathlib import Path
 
@@ -23,8 +13,6 @@ logger = logging.getLogger("uvicorn.error")
 PROJECT_ROOT = Path(__file__).resolve().parent
 MODEL_PATH = PROJECT_ROOT / "model" / "churn_model.pkl"
 
-# Load the saved pipeline (preprocessing + Decision Tree) once, when the module
-# is imported / the app process starts - not per-request, and never retrained here.
 try:
     model = joblib.load(MODEL_PATH)
 except FileNotFoundError as exc:
@@ -69,7 +57,7 @@ def predict(customer: CustomerData) -> PredictionResponse:
         ) from exc
 
     return PredictionResponse(
-        churn_prediction=str(prediction),
+        prediction=str(prediction),
         churn_probability=round(churn_probability, 4),
     )
 
