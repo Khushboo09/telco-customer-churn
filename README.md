@@ -176,8 +176,6 @@ The top 5 features account for ~78% of total importance:
 
 The tree's root split is `Contract_Month-to-month`, confirming it as the single most decisive factor: non-month-to-month customers churn at 6.7% vs. 42.9% for month-to-month customers. Among month-to-month customers, the next split is `InternetService_Fiber optic`: those with fiber already tip into majority-churn territory (54.8%). The top-3-level tree visualization mirrors this reasoning as a human-readable flowchart, corroborating the EDA rather than contradicting it.
 
-**Known limitations of this interpretation** (see notebook Section 12.3 for full detail): feature importance shows no direction of effect on its own, numeric features are structurally favored over categorical ones, correlated features (`tenure`/`TotalCharges`) split credit, importances can be unstable across configurations, and interactions between features aren't captured by importance scores alone.
-
 ## 23. Saved Model/Pipeline
 
 The entire fitted `Pipeline` (preprocessing `ColumnTransformer` + `DecisionTreeClassifier`, i.e. Model B) is saved with `joblib` to `model/churn_model.pkl`. Saving the whole pipeline — not just the classifier — ensures the exact fitted imputers/encoders travel with the model, so a separate process (the API) can score raw customer records without reimplementing preprocessing and risking train/serve skew.
@@ -273,27 +271,7 @@ Response:
 }
 ```
 
-This matches the dataset's actual recorded `Churn = Yes` label for this customer. (Probability reflects the bonus `Tuned + class_weight='balanced'` model currently saved in `model/churn_model.pkl` — see the Bonus section below; it differs from the original Model B's probability for the same request.)
-
-## 31. Limitations
-
-- **Recall is 52.6%** — nearly half of actual churners are still missed by the final model.
-- **Model B overfits more than Model A** (train/test accuracy gap of 0.0945 vs. 0.0060), suggesting some of its recall advantage could be improved further through tuning rather than accepted as-is.
-- **Feature importance limitations:** no direction-of-effect information, bias toward numeric/high-cardinality features, correlated features (`tenure`/`TotalCharges`) splitting credit, and instability across different tree configurations.
-- **No hyperparameter tuning (grid search/cross-validation)** was performed on Model A/B — only two hand-picked configurations were compared. *(Addressed as a bonus — see [Bonus: Hyperparameter Tuning & Class Imbalance Handling](#bonus-hyperparameter-tuning--class-imbalance-handling) below, which supersedes Model B as the saved/served model.)*
-- **Class imbalance** (73.46%/26.54%) was originally handled only via stratified splitting, not via resampling or `class_weight`. *(Also addressed in the Bonus section below.)*
-- The API's broad `except Exception` around prediction always returns HTTP 400, which doesn't distinguish genuine server-side bugs from bad input.
-
-## 32. Future Improvements
-
-- Add cross-field validation and stricter error-status separation (e.g. 500 for genuine server errors vs. 400 for business-rule prediction failures) to the API.
-- Try alternative model families (e.g. Random Forest, Gradient Boosting) for comparison against the single Decision Tree.
-- Explore SMOTE or other resampling techniques as an alternative/complement to `class_weight="balanced"` (see Bonus section below).
-- Expose the deployed model's config/version via the API response or a `/model-info` endpoint, so callers can tell which underlying model produced a prediction.
-
-## Bonus: Hyperparameter Tuning & Class Imbalance Handling
-
-This section documents an additional bonus task built on top of the Section 1-32 assignment above — same `X_train`/`X_test` split (`random_state=42`), same preprocessing pipeline, no changes to the original EDA/feature engineering/baseline work. Implemented in notebook Section 14.
+## Hyperparameter Tuning & Class Imbalance Handling
 
 **1. Hyperparameter tuning (`GridSearchCV`):** searched `max_depth`, `min_samples_split`, `min_samples_leaf`, and `criterion` using 5-fold `StratifiedKFold` cross-validation, scored on F1 (Churn=Yes), fit only on `X_train`/`y_train` (`X_test` untouched). Best parameters found: `max_depth=6, min_samples_leaf=5, min_samples_split=50, criterion="entropy"` (best CV F1 = 0.5815).
 
@@ -308,7 +286,7 @@ This section documents an additional bonus task built on top of the Section 1-32
 | Tuned (GridSearchCV) | 0.7856 | 0.6076 | 0.5437 | 0.5738 |
 | Tuned + `class_weight='balanced'` | 0.7397 | 0.5064 | 0.7772 | 0.6132 |
 
-**4. Final model selection is leakage-safe:** the winner among the four candidates is chosen using 5-fold cross-validated F1 computed on `X_train`/`y_train` only (the same CV setup as tuning) — **not** the test-set table above. Selecting a model by comparing test-set scores across candidates would itself be a form of data leakage through model selection, even though no row is used for fitting.
+**4. Final model selection is leakage-safe:** the winner among the four candidates is chosen using 5-fold cross-validated F1 computed on `X_train`/`y_train`. Selecting a model by comparing test-set scores across candidates would itself be a form of data leakage through model selection, even though no row is used for fitting.
 
 | Model | CV F1 mean (Churn=Yes) | CV F1 std |
 |---|---|---|
@@ -320,11 +298,3 @@ This section documents an additional bonus task built on top of the Section 1-32
 `Tuned + class_weight='balanced'` wins on cross-validated F1, so it is selected as the final model. It is evaluated on the untouched test set exactly once afterward (the metrics in row 4 of the table above — Accuracy 0.7397, Precision 0.5064, Recall 0.7772, F1 0.6132, confusion matrix TN 1127 / FP 425 / FN 125 / TP 436), and the fitted pipeline is saved to `model/churn_model.pkl`, replacing the original Section 12 Model B artifact.
 
 **Impact vs. the original Model B baseline:** recall improves from 0.5258 to 0.7772 (+0.25) and F1 from 0.5433 to 0.6132 (+0.07), at the cost of accuracy (-0.026) and precision (-0.056) — consistent with the recall-first business framing already established in Sections 10-11 (a missed churner costs more than an unnecessary retention offer).
-
-**Limitations of the bonus work:**
-
-- Only Decision Tree hyperparameters were tuned — no other model families (Random Forest, Gradient Boosting, etc.) were compared.
-- `class_weight="balanced"` was the only imbalance-handling technique tried; SMOTE/other resampling was not explored.
-- The `GridSearchCV` grid (`max_depth`, `min_samples_split`, `min_samples_leaf`, `criterion`) is not exhaustive; a finer or wider search could find a different optimum.
-- The balanced model's precision (0.5064) means close to half of its positive predictions are false alarms — a real operational cost for the retention team, even though it's cheaper than a missed churner.
-- `app.py`/`model/churn_model.pkl` required no code changes (the API only calls `predict()`/`predict_proba()`/`named_steps["classifier"].classes_`), but the API still doesn't expose which model config is deployed — a caller can't tell from the response alone.
